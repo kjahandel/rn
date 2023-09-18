@@ -1,0 +1,225 @@
+
+// Server
+const express = require('express');
+const mongoose = require('mongoose');
+const multer = require('multer');
+
+
+// MongoDB Connection
+mongoose.connect('mongodb+srv://admin:passwordpassword@cluster0.clsyvza.mongodb.net/test');
+const db = mongoose.connection;
+db.on('connected', () => {
+    console.log('Conneted to mongodb instance!')
+});
+db.on('error', (error) => {
+    console.log('error');
+});
+db.on('disconnected', () => console.log('Disconnected from Database'));
+db.on('reconnected', () => console.log('Reconnected to Database'));
+db.on('close', () => console.log('Closed connection to Database'));
+
+// Express Server
+const app = express();
+const PORT = 3000;
+app.use(express.urlencoded({extended: true}));
+app.use(express.json());
+app.listen(PORT, () => {
+    console.log(`Express server is running at http://localhost:${PORT}`);
+});
+
+
+// Image schema in MongoDB.
+const imageSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true, 
+        unique: true
+    },
+    data: {
+        type: Buffer,
+        required: true
+    },
+    contentType: {
+        type: String,
+        required: true
+    },
+});
+
+const Image = mongoose.model('Image', imageSchema);
+
+
+const upload = multer();
+
+
+app.post('/images', upload.single('image'), async (req, res) => {
+
+    if (!req.file) {
+        return res.status(400).json({success: false, message: 'No file provided.'});
+    }
+
+    const image = new Image({
+        name: `${uuidv4()}.${req.file.mimetype.split('/')[1]}`,
+        data: req.file.buffer,
+        contentType: req.file.mimetype,
+    });
+
+    try {
+        await image.save();
+    } catch (error) {
+        console.log(error);
+        return res.status(400).json({success: false, message: error.message});
+    }
+
+    return res.status(201).json({
+    success: true,
+    message: 'Image created successfully.',
+    imageName: image.name,
+    });
+});
+
+
+app.get('/images/:name', async (req, res) => {
+  console.log(req.params)
+    const {image} = req.params; 
+    console.log(req.params);
+    const imageName = await Image.findOne({name}); 
+  
+    if (!imageName) {
+      return res.status(404).json({success: false, message: 'Image not found.'});
+    }
+  
+    res.set('Content-Type', image.contentType);
+    res.send(image.data);
+  });
+
+
+//Client
+
+//rc/screens/UploadImage.js
+
+import React, {useState} from 'react';
+import { StyleSheet, Text, TouchableOpacity, Image, Button } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
+
+
+const UploadImage = () => {
+    const [selectedImage, setSelectedImage] = useState(null);
+    const pickImageAsync = async () => {
+        try {
+            const {status} = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+            alert('Sorry, we need camera roll permissions to make this work!');
+            return;
+
+            } else {
+                let result = await ImagePicker.launchImageLibraryAsync({
+                 mediaTypes: ImagePicker.MediaTypeOptions.All,
+                allowsEditing: false,
+                quality: 1,
+                });
+
+                if (!result.canceled) {
+                    setSelectedImage(result.assets[0].uri);
+                }
+
+            }
+        } catch (error) {
+            console.log(error);
+        }
+    };
+
+const createFormData =  (uri) => {
+
+    const fileName = uri.toString().split('/').pop();
+    const fileType = fileName.split('.').pop();
+    const formData = new FormData();
+
+    formData.append('image', {
+        name: fileName,
+        uri,
+        type: `image/${fileType}`,
+    });
+
+    return formData;
+};
+
+const postImage = async (uri) => {
+    try{
+        const data = createFormData(uri);
+        const res = await axios.post('http://localhost:3000/images', data, {
+        headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'multipart/form-data',
+        },
+    });
+
+    return res.data.imageName
+
+    } catch(error){
+        console.log(error.message);
+    }
+
+};
+  
+  return (
+    <>
+    {selectedImage && <Image source={{uri: selectedImage}} style={styles.image} />}
+        <TouchableOpacity style={styles.container} onPress={pickImageAsync} >
+            <Text>+</Text>
+            {/*<Image source={"<SERVER_HOST>/images/<IMAGE_NAME>"} /> */}
+        </TouchableOpacity>
+        <Button title="Upload Photo" onPress={postImage} />
+    </>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    height: 56,
+    width: 56,
+    borderRadius: 28,
+    backgroundColor: 'lightblue',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.2,
+    elevation: 2,
+    marginBottom: 16
+  },
+    image: {
+    width: 300,
+    height: 300,
+    marginBottom: 16,
+    borderRadius: 50
+  }
+
+})
+
+export default UploadImage;
+
+
+
+
+//App.js
+import { StyleSheet, View } from 'react-native';
+import UploadImage from './src/screens/UploadImage';
+
+export default function App() {
+
+  return (
+    <View style={stylesApp.container}>
+      <UploadImage />
+    </View>
+  );
+}
+
+const stylesApp = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
