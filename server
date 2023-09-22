@@ -1,0 +1,104 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const fs = require('fs');
+const multer = require('multer');
+const Image = require('./models/Image');
+const cors = require('cors');
+const path = require('path');
+const { timeStamp } = require('console');
+
+PORT = 5000;
+
+const app = express();
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: false}));
+app.use(cors());
+
+mongoose.connect('mongodb+srv://admin:passwordpassword@cluster0.clsyvza.mongodb.net/', {
+    useNewUrlParser: true,
+});
+
+
+const db = mongoose.connection;
+
+db.on('connected', () => {
+    console.log('Connected to mongodb instance!');
+});
+
+db.on('error', (error) => {
+    console.error('It has an error!', error);
+});
+
+
+const storage = multer.diskStorage({
+    
+    destination: (req, file, cb) => {
+        cb(null, 'uploads')
+    },
+    
+    filename: (req, file, cb) => {
+        const timestamp = Date.now();
+        const filename = `${timestamp}_${file.originalname}`;
+        cb(null, filename);
+    }
+});
+
+
+const upload = multer({storage: storage});
+
+app.post('/uploadImage', upload.single('image'), async (req, res) => {
+    
+    if(!req.file) {
+        return res.status(400).json({error: 'Kein Bild ausgewählt.'})
+    }
+
+    // Extrahieren der Dateierweiterung aus dem Dateinamen
+    const fileExtention = path.extname(req.file.originalname).toLowerCase();
+
+    // Definieren der Dateierwiterung aus dem Dateinamen
+    const supportedFormats = ['.jpg', '.jpeg', '.png', '.gif']; // usw.
+
+    // Überprüfen ob das ausgewählte Format unterstützt wird
+    if(!supportedFormats.includes(fileExtention)){
+        return res.status(400).json({error: 'Das ausgewählte Bildformat wird nicht unterstützt.'});
+    }
+
+    try {
+    const saveImage = Image ({
+        name: req.file.filename,
+        //format: fileExtention, // Speichere des Format in der Datenbank
+        img: {
+            data: fs.readFileSync('uploads/' + req.file.filename),
+            contentType: 'image/' + fileExtention.slice(1), // Passe den contentType an das Dateiformat an
+        },
+        //timestamps: Date.now(),
+    });
+
+    await saveImage.save();
+
+    res.status(201).json({
+        success: true,
+        message: 'Bild erfolgreich hochgeladen',
+        saveImage: saveImage
+    })
+
+
+    } catch (error) {
+    
+        console.error(error);
+        res.status(500).json({success: false, message: 'Fehler beim Hochladen des Bildes!'})
+    }
+});
+
+
+app.get('/retrieveImage', async (req, res) => {
+    const allData = await Image.find();
+    res.json(allData);
+});
+
+app.listen(PORT, () => {
+    console.log(`Express server is running at http://localhost: ${PORT}`);
+});
+
