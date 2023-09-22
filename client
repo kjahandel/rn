@@ -1,0 +1,132 @@
+import { useState } from "react";
+import { StyleSheet, Image, Text, Button, ScrollView, SafeAreaView } from "react-native";
+import axios from "axios";
+import * as ImagePicker from "expo-image-picker";
+
+const UploadSingleImage = () => {
+    const [selectedImageUri, setSelectedImageUri] = useState(null);
+   
+    // Bild auswählen
+    const selectImage = async () => {
+
+       // Berechtigungen anfordern 
+        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if(permissionResult.granted === false) {
+            alert("Für den Zugriff auf die Kamerarolle ist eine Genehmigung erforderlich!");
+            return null; // TODO: Berechtigungsfehler behandeln
+        }
+
+        const pickerResult = await ImagePicker.launchImageLibraryAsync();
+
+        if(pickerResult.cancelled === true){
+            return null; // Abbrechen, wenn kein Bild ausgewählt wurde
+        }
+
+        //console.log(pickerResult.assets[0].uri);
+        // return pickerResult.assets[0].uri;
+        return setSelectedImageUri(pickerResult.assets[0].uri); // Rückgabe des uri des ausgewählten Bildes
+    };
+
+
+    const extractFileName = (uri) => {
+        const uriParts = uri.split('/');
+        return uriParts[uriParts.length -1];
+    }
+
+    // Bild hochladen
+    const uploadImage = async (selectedImageUri) => {
+        
+        if(!selectedImageUri){
+            console.error("Kein Bild zum Hochladen ausgewählt.");
+            return;
+        }
+
+        // Extrahieren des Dateinamens aus der imageUri
+        const fileName = extractFileName(selectedImageUri);
+        const formData = new FormData();
+
+        formData.append('image', {
+            
+            name: fileName,
+            img: {
+                data: selectedImageUri,
+                type: 'image/jpg' || 'image/jpeg' || 'image/png' || 'image/gif',
+            },
+          
+        });
+       
+        try {
+            const response = await axios.post('https://4c5b-77-0-73-93.ngrok-free.app/uploadImage', formData, {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            });
+            
+            console.log("Bild wurde erfolgreich hochgeladen", response.data);
+            alert('Bild wurde erfolgreich hochgeladen.');
+
+        } catch (error) {
+            console.error("Fehler beim Hochladen des Bildes: ", error);
+            alert("Fehler beim Hochladen des Bildes.");
+        }
+    };
+
+
+    const handleSelectedImage = async () => {
+        const uri = await selectImage();
+        if(uri) {
+            setSelectedImageUri(uri);
+        }
+    }
+
+    const handleUploadImage = () => {
+        if(selectedImageUri){
+           // console.log(selectedImageUri);
+            uploadImage(selectedImageUri);
+        }
+        else{
+            console.error("Kein Bild ausgewählt.");
+            alert("Bitte wählen Sie zuerst ein Bild aus.")
+        }
+    }
+    
+    //console.log('selectedImageUri: ', selectedImageUri);
+    //console.log(imageUri);
+        
+    return (
+        
+        <SafeAreaView style= {styles.container}>
+            <Text style={styles.text}>Single Image Uploading React Native</Text>
+            <Button title= "Bild auswählen" onPress={handleSelectedImage} style={styles.button} />
+
+            {selectedImageUri && (<Image source={{uri: selectedImageUri}} style={styles.image} />)} 
+
+            <Button title="Bild hochladen" onPress={handleUploadImage} />
+        
+        </SafeAreaView>
+    );
+
+};
+
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        alignItems: "stretch",
+        justifyContent: "stretch",
+    },
+    image: {
+       height: 300,
+       width: 300,
+       marginHorizontal: 10,
+    },
+    text: {
+        fontSize: 24,
+    },
+    button: {
+        
+    }
+});
+
+export default UploadSingleImage;
